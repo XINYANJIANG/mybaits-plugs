@@ -26,7 +26,7 @@ import java.util.Properties;
 /**
  * @author ：JiangXinYang
  * @date ：Created in 2019/4/3 9:18
- * @description：oracle分页拦截器
+ * @description：mysql分页拦截器
  */
 
 @Intercepts({
@@ -42,32 +42,49 @@ public class PageInterceptor implements Interceptor {
         logger.info("进入拦截器");
         Object[] args = invocation.getArgs();
         MappedStatement mappedStatement = (MappedStatement) args[0];
-        Object para = invocation.getArgs()[1];
-        BoundSql boundSql = mappedStatement.getBoundSql(para);
+
+        //获取参数
+        Object param = invocation.getArgs()[1];
+        BoundSql boundSql = mappedStatement.getBoundSql(param);
         Object parameterObject = boundSql.getParameterObject();
+
+        /**
+         * 判断是否是继承PageVo来判断是否需要进行分页
+         */
         if (parameterObject instanceof PageVo) {
-            PageVo pagevo = (PageVo) para;
+            //强转 为了拿到分页数据
+            PageVo pagevo = (PageVo) param;
             String sql = boundSql.getSql();
-            String countSql = "select count(*) from (" + sql + ") a";
-//            Connection connection = (Connection) invocation.getArgs()[0];
+
+
+            //获取相关配置
             Configuration config = mappedStatement.getConfiguration();
             Connection connection = config.getEnvironment().getDataSource().getConnection();
+
+            //拼接查询当前条件的sql的总条数
+            String countSql = "select count(*) from (" + sql + ") a";
             PreparedStatement preparedStatement = connection.prepareStatement(countSql);
             BoundSql countBoundSql = new BoundSql(config, countSql, boundSql.getParameterMappings(), boundSql.getParameterObject());
             ParameterHandler parameterHandler = new DefaultParameterHandler(mappedStatement, parameterObject, countBoundSql);
             parameterHandler.setParameters(preparedStatement);
+            //执行获得总条数
             ResultSet rs = preparedStatement.executeQuery();
             int count = 0;
             if (rs.next()) {
                 count = rs.getInt(1);
             }
+
+
+            //拼接分页sql
             String pageSql = sql + " limit " + pagevo.getLimit() + " , " + pagevo.getOffset();
-            resetSql2Invocation(invocation, pageSql);
+            //重新执行新的sql
+            doNewSql(invocation, pageSql);
+
             Object result = invocation.proceed();
             connection.close();
+            //处理新的结构
             PageResult<?> pageResult = new PageResult<List>(pagevo.page, pagevo.rows, count, (List) result);
             List<PageResult> returnResultList = new ArrayList<>();
-
             returnResultList.add(pageResult);
 
             return returnResultList;
@@ -76,7 +93,7 @@ public class PageInterceptor implements Interceptor {
 
     }
 
-    private void resetSql2Invocation(Invocation invocation, String sql) throws SQLException {
+    private void doNewSql(Invocation invocation, String sql){
         final Object[] args = invocation.getArgs();
         MappedStatement statement = (MappedStatement) args[0];
         Object parameterObject = args[1];
@@ -88,6 +105,12 @@ public class PageInterceptor implements Interceptor {
     }
 
 
+    /**
+     * 获取新的MappedStatement
+     * @param ms
+     * @param newSqlSource
+     * @return
+     */
     private MappedStatement newMappedStatement(MappedStatement ms, SqlSource newSqlSource) {
         MappedStatement.Builder builder =
                 new MappedStatement.Builder(ms.getConfiguration(), ms.getId(), newSqlSource, ms.getSqlCommandType());
@@ -126,6 +149,9 @@ public class PageInterceptor implements Interceptor {
 
     }
 
+    /**
+     * 新的SqlSource需要实现
+     */
     class BoundSqlSqlSource implements SqlSource {
         private BoundSql boundSql;
 

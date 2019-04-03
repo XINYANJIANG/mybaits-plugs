@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.wtn.mybatis_plugs.dao.UserDao">
+
+
+    <select id="findAllUser" resultType="com.wtn.mybatis_plugs.domain.User">
+        select * from user
+    </select>
+    <select id="findAllUserByUsername" resultType="com.wtn.mybatis_plugs.domain.User">
+        select * from user where username = #{username} and id = #{id}
+    </select>
+    <select id="findUserPage" resultType="com.wtn.mybatis_plugs.domain.User">
+        select * from user WHERE username = #{username}
+    </select>
+</mapper>
